@@ -25,7 +25,9 @@ object WebCrawler extends App {
   def wget(u: URL): Future[Seq[URL]] = {
     // Hint: write as a for-comprehension, using the method createURL(Option[URL], String) to get the appropriate URL for relative links
     // 16 points.
-    def getURLs(ns: Node): Seq[Try[URL]] = ??? // TO BE IMPLEMENTED
+    def getURLs(ns: Node): Seq[Try[URL]] = {
+
+      for (a <- ns\\"a"; h <- a\"@href") yield createURL(Option(new URL("http://")), h.text) }// TO BE IMPLEMENTED
 
     def getLinks(g: String): Try[Seq[URL]] = {
       val ny = HTMLParser.parse(g) recoverWith { case f => Failure(new RuntimeException(s"parse problem with URL $u: $f")) }
@@ -33,7 +35,7 @@ object WebCrawler extends App {
     }
     // Hint: write as a for-comprehension, using getURLContent (above) and getLinks above. You might also need MonadOps.asFuture
     // 9 points.
-    ??? // TO BE IMPLEMENTED
+    for (n <- getURLContent(u); m <- MonadOps.asFuture(getLinks(n))) yield m // TO BE IMPLEMENTED
   }
 
   def wget(us: Seq[URL]): Future[Seq[Either[Throwable, Seq[URL]]]] = {
@@ -41,7 +43,9 @@ object WebCrawler extends App {
     // Hint: Use wget(URL) (above). MonadOps.sequence and Future.sequence are also available to you to use.
     // 15 points. Implement the rest of this, based on us2 instead of us.
     // TO BE IMPLEMENTED
-    ???
+    val ls = for (u <- us2) yield wget(u)
+    val s = for (l <- ls) yield MonadOps.sequence(l)
+    Future.sequence(s)
   }
 
   def crawler(depth: Int, us: Seq[URL]): Future[Seq[URL]] = {
@@ -68,7 +72,7 @@ object WebCrawler extends App {
 
   private def sourceToString(source: BufferedSource, errorMsg: String): Try[String] =
     try Success(source mkString) catch {
-      case NonFatal(e) => Failure(WebCrawlerException(errorMsg, e))
+      case NonFatal(e) => Failure(WebCrawlerURLException(errorMsg, e))
     }
 
   private def getURL(resource: String): Try[URL] = createURL(null, resource)
@@ -77,13 +81,19 @@ object WebCrawler extends App {
     try Success(new URL(context.orNull, resource)) catch {
       case NonFatal(e) =>
         val message: String = s"""Bad URL: ${if (context.isDefined) "context: " + context else ""} resource=$resource"""
-        Failure(WebCrawlerException(message, e))
+        Failure(WebCrawlerURLException(message, e))
     }
 
   private def SourceFromURL(resource: URL): Try[BufferedSource] =
     try Success(Source.fromURL(resource)) catch {
-      case NonFatal(e) => Failure(WebCrawlerException(s"""Cannot get source from URL: $resource""", e))
+      case NonFatal(e) => Failure(WebCrawlerURLException(s"""Cannot get source from URL: $resource""", e))
     }
 }
 
-case class WebCrawlerException(url: String, cause: Throwable) extends Exception(s"Web Crawler could not decode URL: $url", cause)
+case class WebCrawlerURLException(url: String, cause: Throwable) extends Exception(s"Web Crawler could not decode URL: $url", cause)
+
+case class WebCrawlerException(msg: String, cause: Throwable) extends Exception(msg, cause)
+
+object WebCrawlerException {
+  def apply(msg: String): WebCrawlerException = apply(msg, null)
+}
